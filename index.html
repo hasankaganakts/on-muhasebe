@@ -1,0 +1,1041 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <title>Gelişmiş Ön Muhasebe Programı</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Firebase SDK (Sürüm 9 - Compat Modu) -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
+    <style>
+        body {
+            background-color: #f0f2f5;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        #app {
+            display: none;
+        }
+        #logout {
+            display: none;
+        }
+        /* Toast bildirimleri için stil */
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1055;
+        }
+        /* Kategori listesi için stil */
+        .category-header {
+            cursor: pointer;
+            user-select: none;
+        }
+        .subcategory-list {
+            display: none;
+            margin-left: 20px;
+        }
+        .subcategory-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        /* Minimal kart stilleri */
+        .card-header {
+            background-color: #ffffff;
+            border-bottom: 1px solid #dee2e6;
+        }
+        .card {
+            border: none;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        /* Modern buton stilleri */
+        .btn-primary {
+            background-color: #4e73df;
+            border-color: #4e73df;
+        }
+        .btn-primary:hover {
+            background-color: #2e59d9;
+            border-color: #2653d4;
+        }
+        .btn-success {
+            background-color: #1cc88a;
+            border-color: #17a673;
+        }
+        .btn-success:hover {
+            background-color: #10a56f;
+            border-color: #0f995c;
+        }
+        .btn-warning {
+            background-color: #f6c23e;
+            border-color: #f6c23e;
+        }
+        .btn-warning:hover {
+            background-color: #dda20a;
+            border-color: #c7960a;
+        }
+        .btn-danger {
+            background-color: #e74a3b;
+            border-color: #e74a3b;
+        }
+        .btn-danger:hover {
+            background-color: #c23a2a;
+            border-color: #a32925;
+        }
+    </style>
+</head>
+<body>
+    <!-- Toast Container -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">Ön Muhasebe</a>
+            <button id="logout" class="btn btn-outline-light">Çıkış Yap</button>
+        </div>
+    </nav>
+
+    <!-- Giriş ve Kayıt Formları -->
+    <div class="container mt-5" id="auth-forms">
+        <!-- Giriş Formu -->
+        <div id="login-form">
+            <h2 class="mb-4">Giriş Yap</h2>
+            <form id="login">
+                <div class="mb-3">
+                    <label for="login-email" class="form-label">Email:</label>
+                    <input type="email" id="login-email" class="form-control" required>
+                </div>
+                <div class="mb-3">
+                    <label for="login-password" class="form-label">Şifre:</label>
+                    <input type="password" id="login-password" class="form-control" required>
+                </div>
+                <button type="submit" class="btn btn-primary w-100">Giriş Yap</button>
+                <p class="mt-3 text-center">Hesabınız yok mu? <a href="#" id="show-register">Kayıt Ol</a></p>
+            </form>
+        </div>
+
+        <!-- Kayıt Formu -->
+        <div id="register-form" style="display: none;">
+            <h2 class="mb-4">Kayıt Ol</h2>
+            <form id="register">
+                <div class="mb-3">
+                    <label for="register-email" class="form-label">Email:</label>
+                    <input type="email" id="register-email" class="form-control" required>
+                </div>
+                <div class="mb-3">
+                    <label for="register-password" class="form-label">Şifre:</label>
+                    <input type="password" id="register-password" class="form-control" required>
+                </div>
+                <button type="submit" class="btn btn-primary w-100">Kayıt Ol</button>
+                <p class="mt-3 text-center">Hesabınız var mı? <a href="#" id="show-login">Giriş Yap</a></p>
+            </form>
+        </div>
+    </div>
+
+    <!-- Uygulama İçeriği -->
+    <div class="container mt-5" id="app">
+        <h1 class="text-center mb-5">Gelişmiş Ön Muhasebe Programı</h1>
+
+        <!-- Widget Alanı -->
+        <div id="widget-area" class="row mb-4">
+            <!-- Widget'lar buraya yüklenecek -->
+        </div>
+
+        <!-- Yeni İşlem Ekleme -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h2>Yeni İşlem Ekle</h2>
+            </div>
+            <div class="card-body">
+                <form id="transaction-form">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label for="date" class="form-label">Tarih:</label>
+                            <input type="date" id="date" class="form-control" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="amount" class="form-label">Tutar (TL):</label>
+                            <input type="number" id="amount" class="form-control" step="0.01" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="type" class="form-label">Tür:</label>
+                            <select id="type" class="form-select" required>
+                                <option value="gelir">Gelir</option>
+                                <option value="gider">Gider</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="category" class="form-label">Kategori:</label>
+                            <select id="category" class="form-select" required>
+                                <!-- Kategoriler yüklenecek -->
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="subcategory" class="form-label">Alt Kategori:</label>
+                            <select id="subcategory" class="form-select">
+                                <!-- Alt kategoriler yüklenecek -->
+                            </select>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary mt-3 w-100">İşlem Ekle</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Kategori Yönetimi Paneli -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h2>Kategori Yönetimi</h2>
+            </div>
+            <div class="card-body">
+                <!-- Kategori Ekleme Formu -->
+                <form id="category-form" class="mb-4">
+                    <div class="row g-3">
+                        <div class="col-md-8">
+                            <label for="new-category" class="form-label">Yeni Kategori Adı:</label>
+                            <input type="text" id="new-category" class="form-control" required>
+                        </div>
+                        <div class="col-md-4 d-flex align-items-end">
+                            <button type="submit" class="btn btn-success w-100">Kategori Ekle</button>
+                        </div>
+                    </div>
+                </form>
+                <!-- Kategori ve Alt Kategori Yönetimi -->
+                <ul id="category-list" class="list-group">
+                    <!-- Kategoriler ve alt kategoriler buraya yüklenecek -->
+                </ul>
+            </div>
+        </div>
+
+        <!-- Raporlama -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h2>Raporlama</h2>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label for="start-date" class="form-label">Başlangıç Tarihi:</label>
+                        <input type="date" id="start-date" class="form-control">
+                    </div>
+                    <div class="col-md-6">
+                        <label for="end-date" class="form-label">Bitiş Tarihi:</label>
+                        <input type="date" id="end-date" class="form-control">
+                    </div>
+                </div>
+                <button id="generate-report" class="btn btn-success mt-3">Rapor Oluştur</button>
+
+                <h3 class="mt-4">Rapor Sonuçları:</h3>
+                <p id="report-summary" class="fw-bold"></p>
+                <div class="table-responsive">
+                    <table class="table table-striped" id="transactions-table">
+                        <thead>
+                            <tr>
+                                <th>Tarih</th>
+                                <th>Tür</th>
+                                <th>Kategori</th>
+                                <th>Alt Kategori</th>
+                                <th>Tutar (TL)</th>
+                                <th>İşlemler</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- İşlemler buraya eklenecek -->
+                        </tbody>
+                    </table>
+                </div>
+                <!-- Grafik Alanı -->
+                <canvas id="myChart" width="400" height="200"></canvas>
+            </div>
+        </div>
+
+        <!-- Hatırlatıcılar -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h2>Hatırlatıcılar</h2>
+            </div>
+            <div class="card-body">
+                <form id="reminder-form" class="mb-4">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label for="reminder-date" class="form-label">Tarih:</label>
+                            <input type="date" id="reminder-date" class="form-control" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="reminder-message" class="form-label">Mesaj:</label>
+                            <input type="text" id="reminder-message" class="form-control" required>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary mt-3 w-100">Hatırlatıcı Ekle</button>
+                </form>
+                <h3 class="mt-4">Mevcut Hatırlatıcılar:</h3>
+                <ul id="reminder-list" class="list-group">
+                    <!-- Hatırlatıcılar buraya yüklenecek -->
+                </ul>
+            </div>
+        </div>
+
+        <!-- Veri İçe/Dışa Aktarma -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h2>Veri İçe/Dışa Aktarma</h2>
+            </div>
+            <div class="card-body">
+                <button id="export-data" class="btn btn-secondary">Verileri Dışa Aktar</button>
+                <div class="mt-3">
+                    <input type="file" id="import-file" accept=".csv" class="form-control">
+                    <button id="import-data" class="btn btn-secondary mt-2">Verileri İçe Aktar</button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Bootstrap JS ve JavaScript kodları -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Firebase yapılandırması
+        var firebaseConfig = {
+            apiKey: "AIzaSyDHhEpHPvBLBfocnFwZGznjy5WM8tYBxKk",                // Buraya kendi API anahtarınızı ekleyin
+            authDomain: "onmuhasebeuygulamasi.firebaseapp.com",        // Örnek: "your-project.firebaseapp.com"
+            projectId: "onmuhasebeuygulamasi",          // Örnek: "your-project-id"
+            storageBucket: "onmuhasebeuygulamasi.appspot.com",  // Örnek: "your-project.appspot.com"
+            messagingSenderId: "806641478957",
+            appId: "1:806641478957:web:273c7becf76c45e26877a4"
+        };
+
+        // Firebase'i başlatma
+        firebase.initializeApp(firebaseConfig);
+
+        // Firebase servislerini başlatma
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+
+        // Kullanıcı durumunu izleme
+        auth.onAuthStateChanged((user) => {
+            if (user) {
+                // Giriş yapıldıysa
+                document.getElementById('auth-forms').style.display = 'none';
+                document.getElementById('app').style.display = 'block';
+                document.getElementById('logout').style.display = 'block';
+                loadUserData(user.uid);
+            } else {
+                // Giriş yapılmadıysa
+                document.getElementById('auth-forms').style.display = 'block';
+                document.getElementById('app').style.display = 'none';
+                document.getElementById('logout').style.display = 'none';
+            }
+        });
+
+        // Giriş ve Kayıt İşlemleri
+        document.getElementById('show-register').addEventListener('click', function() {
+            document.getElementById('login-form').style.display = 'none';
+            document.getElementById('register-form').style.display = 'block';
+        });
+
+        document.getElementById('show-login').addEventListener('click', function() {
+            document.getElementById('register-form').style.display = 'none';
+            document.getElementById('login-form').style.display = 'block';
+        });
+
+        // Kayıt işlemi
+        document.getElementById('register').addEventListener('submit', function(e) {
+            e.preventDefault();
+            let email = document.getElementById('register-email').value;
+            let password = document.getElementById('register-password').value;
+
+            auth.createUserWithEmailAndPassword(email, password)
+                .then((userCredential) => {
+                    showToast('Kayıt başarılı!', 'success');
+                    document.getElementById('register').reset();
+                })
+                .catch((error) => {
+                    showToast(error.message, 'danger');
+                });
+        });
+
+        // Giriş işlemi
+        document.getElementById('login').addEventListener('submit', function(e) {
+            e.preventDefault();
+            let email = document.getElementById('login-email').value;
+            let password = document.getElementById('login-password').value;
+
+            auth.signInWithEmailAndPassword(email, password)
+                .then((userCredential) => {
+                    showToast('Giriş başarılı!', 'success');
+                    document.getElementById('login').reset();
+                })
+                .catch((error) => {
+                    showToast(error.message, 'danger');
+                });
+        });
+
+        // Çıkış yapma
+        document.getElementById('logout').addEventListener('click', function() {
+            auth.signOut().then(() => {
+                showToast('Çıkış yapıldı.', 'success');
+            });
+        });
+
+        // Kategoriler, İşlemler, Hatırlatıcılar ve Kullanıcı Verileri
+        let categories = []; // Kategoriler ve alt kategoriler
+        let transactions = [];
+        let reminders = [];
+
+        // Kategori Ekleme ve Yükleme
+        document.getElementById('category-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            let newCategory = document.getElementById('new-category').value.trim();
+            if (newCategory !== '' && !categories.some(cat => cat.name.toLowerCase() === newCategory.toLowerCase())) {
+                categories.push({ name: newCategory, subcategories: [] });
+                saveUserData();
+                loadCategories();
+                loadCategoryList();
+                showToast('Kategori eklendi!', 'success');
+                this.reset();
+            } else {
+                showToast('Geçerli bir kategori girin veya kategori zaten mevcut.', 'danger');
+            }
+        });
+
+        // Kategorileri yükleme
+        function loadCategories() {
+            let categorySelect = document.getElementById('category');
+            categorySelect.innerHTML = '<option value="" disabled selected>Seçiniz</option>';
+            categories.forEach(function(cat) {
+                let option = document.createElement('option');
+                option.value = cat.name;
+                option.textContent = cat.name;
+                categorySelect.appendChild(option);
+            });
+            loadSubcategories(); // Alt kategorileri yükle
+        }
+
+        // Kategori listesini yükleme
+        function loadCategoryList() {
+            let categoryList = document.getElementById('category-list');
+            categoryList.innerHTML = '';
+
+            if (!Array.isArray(categories)) {
+                showToast('Kategoriler yüklenemedi. Lütfen tekrar deneyin.', 'danger');
+                return;
+            }
+
+            categories.forEach(function(cat, index) {
+                let li = document.createElement('li');
+                li.className = 'list-group-item';
+
+                let headerDiv = document.createElement('div');
+                headerDiv.className = 'd-flex justify-content-between align-items-center category-header';
+
+                let catName = document.createElement('span');
+                catName.textContent = cat.name;
+
+                let btnGroup = document.createElement('div');
+
+                // Alt kategori ekleme butonu
+                let addSubBtn = document.createElement('button');
+                addSubBtn.className = 'btn btn-sm btn-success me-2';
+                addSubBtn.textContent = 'Alt Kategori Ekle';
+                addSubBtn.setAttribute('data-index', index);
+                addSubBtn.addEventListener('click', addSubcategory);
+                btnGroup.appendChild(addSubBtn);
+
+                // Kategori düzenleme butonu
+                let editBtn = document.createElement('button');
+                editBtn.className = 'btn btn-sm btn-warning me-2';
+                editBtn.textContent = 'Düzenle';
+                editBtn.setAttribute('data-index', index);
+                editBtn.addEventListener('click', editCategory);
+                btnGroup.appendChild(editBtn);
+
+                // Kategori silme butonu
+                let deleteBtn = document.createElement('button');
+                deleteBtn.className = 'btn btn-sm btn-danger';
+                deleteBtn.textContent = 'Sil';
+                deleteBtn.setAttribute('data-index', index);
+                deleteBtn.addEventListener('click', deleteCategory);
+                btnGroup.appendChild(deleteBtn);
+
+                headerDiv.appendChild(catName);
+                headerDiv.appendChild(btnGroup);
+                li.appendChild(headerDiv);
+
+                // Alt kategoriler
+                let subList = document.createElement('ul');
+                subList.className = 'list-group subcategory-list mt-2';
+
+                if (Array.isArray(cat.subcategories)) {
+                    cat.subcategories.forEach(function(sub, subIndex) {
+                        let subLi = document.createElement('li');
+                        subLi.className = 'list-group-item subcategory-item';
+
+                        let subName = document.createElement('span');
+                        subName.textContent = sub;
+
+                        let subBtnGroup = document.createElement('div');
+
+                        // Alt kategori düzenleme butonu
+                        let editSubBtn = document.createElement('button');
+                        editSubBtn.className = 'btn btn-sm btn-warning me-2';
+                        editSubBtn.textContent = 'Düzenle';
+                        editSubBtn.setAttribute('data-cat-index', index);
+                        editSubBtn.setAttribute('data-sub-index', subIndex);
+                        editSubBtn.addEventListener('click', editSubcategory);
+                        subBtnGroup.appendChild(editSubBtn);
+
+                        // Alt kategori silme butonu
+                        let deleteSubBtn = document.createElement('button');
+                        deleteSubBtn.className = 'btn btn-sm btn-danger';
+                        deleteSubBtn.textContent = 'Sil';
+                        deleteSubBtn.setAttribute('data-cat-index', index);
+                        deleteSubBtn.setAttribute('data-sub-index', subIndex);
+                        deleteSubBtn.addEventListener('click', deleteSubcategory);
+                        subBtnGroup.appendChild(deleteSubBtn);
+
+                        subLi.appendChild(subName);
+                        subLi.appendChild(subBtnGroup);
+                        subList.appendChild(subLi);
+                    });
+                }
+
+                li.appendChild(subList);
+
+                // Kategori başlığına tıklandığında alt kategorileri göster/gizle
+                headerDiv.addEventListener('click', function(e) {
+                    // Sadece kategori ismine tıklanırsa toggle yap
+                    if (e.target === catName) {
+                        subList.style.display = subList.style.display === 'none' ? 'block' : 'none';
+                    }
+                });
+
+                categoryList.appendChild(li);
+            });
+        }
+
+        // Alt kategori ekleme fonksiyonu
+        function addSubcategory(e) {
+            e.stopPropagation(); // Event bubbling'i engelle
+            let index = this.getAttribute('data-index');
+            let subcategoryName = prompt('Alt kategori adını girin:');
+            if (subcategoryName && subcategoryName.trim() !== '') {
+                if (!categories[index].subcategories.some(sub => sub.toLowerCase() === subcategoryName.toLowerCase())) {
+                    categories[index].subcategories.push(subcategoryName.trim());
+                    saveUserData();
+                    loadSubcategories();
+                    loadCategoryList();
+                    showToast('Alt kategori eklendi!', 'success');
+                } else {
+                    showToast('Bu alt kategori zaten mevcut.', 'danger');
+                }
+            } else {
+                showToast('Geçerli bir alt kategori adı girin.', 'danger');
+            }
+        }
+
+        // Alt kategorileri yükleme
+        function loadSubcategories() {
+            let subcategorySelect = document.getElementById('subcategory');
+            subcategorySelect.innerHTML = '<option value="" disabled selected>Seçiniz</option>';
+            let selectedCategory = document.getElementById('category').value;
+            if (selectedCategory) {
+                let category = categories.find(cat => cat.name === selectedCategory);
+                if (category && Array.isArray(category.subcategories)) {
+                    category.subcategories.forEach(function(sub) {
+                        let option = document.createElement('option');
+                        option.value = sub;
+                        option.textContent = sub;
+                        subcategorySelect.appendChild(option);
+                    });
+                }
+            }
+        }
+
+        // Kategori seçildiğinde alt kategorileri yükleme
+        document.getElementById('category').addEventListener('change', loadSubcategories);
+
+        // Alt kategori düzenleme fonksiyonu
+        function editSubcategory(e) {
+            e.stopPropagation(); // Event bubbling'i engelle
+            let catIndex = this.getAttribute('data-cat-index');
+            let subIndex = this.getAttribute('data-sub-index');
+            let oldSub = categories[catIndex].subcategories[subIndex];
+            let newSub = prompt('Yeni alt kategori adını girin:', oldSub);
+            if (newSub && newSub.trim() !== '') {
+                if (!categories[catIndex].subcategories.some(sub => sub.toLowerCase() === newSub.trim().toLowerCase())) {
+                    // İşlemlerdeki alt kategori adını güncelleme
+                    transactions.forEach(function(t) {
+                        if (t.category === categories[catIndex].name && t.subcategory === oldSub) {
+                            t.subcategory = newSub.trim();
+                        }
+                    });
+                    categories[catIndex].subcategories[subIndex] = newSub.trim();
+                    saveUserData();
+                    loadSubcategories();
+                    loadCategoryList();
+                    updateTransactionTable(transactions);
+                    showToast('Alt kategori güncellendi!', 'success');
+                } else {
+                    showToast('Bu alt kategori zaten mevcut.', 'danger');
+                }
+            } else {
+                showToast('Geçerli bir alt kategori adı girin.', 'danger');
+            }
+        }
+
+        // Alt kategori silme fonksiyonu
+        function deleteSubcategory(e) {
+            e.stopPropagation(); // Event bubbling'i engelle
+            let catIndex = this.getAttribute('data-cat-index');
+            let subIndex = this.getAttribute('data-sub-index');
+            let subToDelete = categories[catIndex].subcategories[subIndex];
+
+            // Alt kategoriyi kullanan işlemleri kontrol etme
+            let isSubUsed = transactions.some(function(t) {
+                return t.category === categories[catIndex].name && t.subcategory === subToDelete;
+            });
+            if (isSubUsed) {
+                showToast('Bu alt kategoriye ait işlemler mevcut. Önce işlemleri silin veya düzenleyin.', 'danger');
+            } else {
+                categories[catIndex].subcategories.splice(subIndex, 1);
+                saveUserData();
+                loadSubcategories();
+                loadCategoryList();
+                showToast('Alt kategori silindi!', 'success');
+            }
+        }
+
+        // Kategori düzenleme fonksiyonu
+        function editCategory(e) {
+            e.stopPropagation(); // Event bubbling'i engelle
+            let index = this.getAttribute('data-index');
+            let oldCategory = categories[index].name;
+            let newCategory = prompt('Yeni kategori adını girin:', oldCategory);
+            if (newCategory && newCategory.trim() !== '') {
+                if (!categories.some(cat => cat.name.toLowerCase() === newCategory.trim().toLowerCase())) {
+                    // İşlemlerdeki kategori adını güncelleme
+                    transactions.forEach(function(t) {
+                        if (t.category === oldCategory) {
+                            t.category = newCategory.trim();
+                        }
+                    });
+                    // Kategoriyi güncelleme
+                    categories[index].name = newCategory.trim();
+                    saveUserData();
+                    loadCategories();
+                    loadCategoryList();
+                    updateTransactionTable(transactions);
+                    showToast('Kategori güncellendi!', 'success');
+                } else {
+                    showToast('Bu kategori zaten mevcut.', 'danger');
+                }
+            } else {
+                showToast('Geçerli bir kategori adı girin.', 'danger');
+            }
+        }
+
+        // Kategori silme fonksiyonu
+        function deleteCategory(e) {
+            e.stopPropagation(); // Event bubbling'i engelle
+            let index = this.getAttribute('data-index');
+            let categoryToDelete = categories[index].name;
+            // Kategoriyi kullanan işlemleri kontrol etme
+            let isCategoryUsed = transactions.some(function(t) {
+                return t.category === categoryToDelete;
+            });
+            if (isCategoryUsed) {
+                showToast('Bu kategoriye ait işlemler mevcut. Önce işlemleri silin veya düzenleyin.', 'danger');
+            } else {
+                categories.splice(index, 1);
+                saveUserData();
+                loadCategories();
+                loadCategoryList();
+                showToast('Kategori silindi!', 'success');
+            }
+        }
+
+        // İşlem ekleme veya güncelleme
+        document.getElementById('transaction-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            let date = document.getElementById('date').value;
+            let amount = parseFloat(document.getElementById('amount').value);
+            let type = document.getElementById('type').value;
+            let category = document.getElementById('category').value;
+            let subcategory = document.getElementById('subcategory').value;
+
+            let transaction = {
+                date: date,
+                amount: amount,
+                type: type,
+                category: category,
+                subcategory: subcategory
+            };
+
+            let editIndex = this.getAttribute('data-edit-index');
+            if (editIndex !== null && editIndex !== '') {
+                // Güncelleme işlemi
+                transactions[editIndex] = transaction;
+                this.removeAttribute('data-edit-index');
+                this.querySelector('button').textContent = 'İşlem Ekle';
+                showToast('İşlem güncellendi!', 'success');
+            } else {
+                // Yeni işlem ekleme
+                transactions.push(transaction);
+                showToast('İşlem başarıyla eklendi!', 'success');
+            }
+
+            saveUserData();
+
+            this.reset();
+            updateTransactionTable(transactions);
+            loadWidgets(); // Widget'ları güncelle
+        });
+
+        // İşlem tablosunu güncelleyen fonksiyon
+        function updateTransactionTable(transactionsToDisplay) {
+            let tableBody = document.getElementById('transactions-table').getElementsByTagName('tbody')[0];
+            tableBody.innerHTML = '';
+
+            transactionsToDisplay.forEach(function(t, index) {
+                let row = tableBody.insertRow();
+
+                let cellDate = row.insertCell(0);
+                let cellType = row.insertCell(1);
+                let cellCategory = row.insertCell(2);
+                let cellSubcategory = row.insertCell(3);
+                let cellAmount = row.insertCell(4);
+                let cellActions = row.insertCell(5);
+
+                cellDate.innerText = t.date;
+                cellType.innerText = t.type.charAt(0).toUpperCase() + t.type.slice(1);
+                cellCategory.innerText = t.category;
+                cellSubcategory.innerText = t.subcategory;
+                cellAmount.innerText = t.amount.toFixed(2) + ' TL';
+
+                cellActions.innerHTML = `
+                    <button class="btn btn-sm btn-warning edit-btn me-2" data-index="${index}">Düzenle</button>
+                    <button class="btn btn-sm btn-danger delete-btn" data-index="${index}">Sil</button>
+                `;
+            });
+
+            // Düzenle ve sil butonlarını dinleme
+            document.querySelectorAll('.edit-btn').forEach(function(button) {
+                button.addEventListener('click', editTransaction);
+            });
+
+            document.querySelectorAll('.delete-btn').forEach(function(button) {
+                button.addEventListener('click', deleteTransaction);
+            });
+        }
+
+        // İşlem silme fonksiyonu
+        function deleteTransaction() {
+            let index = this.getAttribute('data-index');
+            transactions.splice(index, 1);
+            saveUserData();
+            updateTransactionTable(transactions);
+            showToast('İşlem silindi!', 'success');
+            loadWidgets(); // Widget'ları güncelle
+        }
+
+        // İşlem düzenleme fonksiyonu
+        function editTransaction() {
+            let index = this.getAttribute('data-index');
+            let t = transactions[index];
+
+            // Formu doldurma
+            document.getElementById('date').value = t.date;
+            document.getElementById('amount').value = t.amount;
+            document.getElementById('type').value = t.type;
+            document.getElementById('category').value = t.category;
+            loadSubcategories();
+            document.getElementById('subcategory').value = t.subcategory;
+
+            // Güncelleme modunu belirtme
+            document.getElementById('transaction-form').setAttribute('data-edit-index', index);
+            document.getElementById('transaction-form').querySelector('button').textContent = 'Güncelle';
+        }
+
+        // Kullanıcı verilerini kaydetme ve yükleme
+        function saveUserData() {
+            let userId = auth.currentUser.uid;
+            db.collection('users').doc(userId).set({
+                categories: categories,
+                transactions: transactions,
+                reminders: reminders
+            });
+        }
+
+        function loadUserData(userId) {
+            db.collection('users').doc(userId).get()
+                .then((doc) => {
+                    if (doc.exists) {
+                        categories = Array.isArray(doc.data().categories) ? doc.data().categories : [];
+                        transactions = Array.isArray(doc.data().transactions) ? doc.data().transactions : [];
+                        reminders = Array.isArray(doc.data().reminders) ? doc.data().reminders : [];
+
+                        // Her kategorinin subcategories dizisinin tanımlı olduğundan emin ol
+                        categories.forEach(cat => {
+                            if (!Array.isArray(cat.subcategories)) {
+                                cat.subcategories = [];
+                            }
+                        });
+
+                        loadCategories();
+                        loadCategoryList();
+                        loadWidgets();
+                        loadReminders();
+                        updateTransactionTable(transactions);
+                        checkReminders();
+                    } else {
+                        // Yeni kullanıcı için varsayılan veriler
+                        db.collection('users').doc(userId).set({
+                            categories: [],
+                            transactions: [],
+                            reminders: []
+                        });
+                    }
+                })
+                .catch((error) => {
+                    showToast(error.message, 'danger');
+                });
+        }
+
+        // Rapor oluşturma butonunu dinliyoruz
+        document.getElementById('generate-report').addEventListener('click', function() {
+            let startDate = document.getElementById('start-date').value;
+            let endDate = document.getElementById('end-date').value;
+
+            // Tarih aralığına göre filtreleme
+            let filteredTransactions = transactions.filter(function(t) {
+                let transactionDate = new Date(t.date);
+                if (startDate && new Date(startDate) > transactionDate) {
+                    return false;
+                }
+                if (endDate && new Date(endDate) < transactionDate) {
+                    return false;
+                }
+                return true;
+            });
+
+            // Toplam gelir ve gider hesaplama
+            let totalIncome = 0;
+            let totalExpense = 0;
+
+            filteredTransactions.forEach(function(t) {
+                if (t.type === 'gelir') {
+                    totalIncome += t.amount;
+                } else if (t.type === 'gider') {
+                    totalExpense += t.amount;
+                }
+            });
+
+            let balance = totalIncome - totalExpense;
+
+            // Rapor özetini gösterme
+            document.getElementById('report-summary').innerText = `Toplam Gelir: ${totalIncome.toFixed(2)} TL\nToplam Gider: ${totalExpense.toFixed(2)} TL\nBakiye: ${balance.toFixed(2)} TL`;
+
+            // İşlem tablosunu güncelleme
+            updateTransactionTable(filteredTransactions);
+
+            // Grafik oluşturma
+            generateChart(filteredTransactions);
+        });
+
+        // Grafik oluşturma fonksiyonu
+        function generateChart(filteredTransactions) {
+            let ctx = document.getElementById('myChart').getContext('2d');
+            let labels = [];
+            let data = [];
+
+            // Tarihe göre toplam tutarları hesaplama
+            let amountsByDate = {};
+            filteredTransactions.forEach(function(t) {
+                if (!amountsByDate[t.date]) {
+                    amountsByDate[t.date] = 0;
+                }
+                amountsByDate[t.date] += t.amount * (t.type === 'gelir' ? 1 : -1);
+            });
+
+            for (let date in amountsByDate) {
+                labels.push(date);
+                data.push(amountsByDate[date]);
+            }
+
+            if (window.myChart) {
+                window.myChart.destroy();
+            }
+
+            window.myChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Bakiye',
+                        data: data,
+                        borderColor: 'rgba(78, 115, 223, 1)',
+                        backgroundColor: 'rgba(78, 115, 223, 0.05)',
+                        fill: true,
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: {
+                                display: false
+                            }
+                        },
+                        y: {
+                            grid: {
+                                color: 'rgba(234, 236, 244, 1)',
+                                drawBorder: false
+                            },
+                            ticks: {
+                                beginAtZero: true,
+                                color: '#858796',
+                                padding: 10
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Hatırlatıcı ekleme ve yükleme
+        document.getElementById('reminder-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            let date = document.getElementById('reminder-date').value;
+            let message = document.getElementById('reminder-message').value.trim();
+            if (date && message) {
+                reminders.push({ date: date, message: message });
+                saveUserData();
+                loadReminders();
+                showToast('Hatırlatıcı eklendi!', 'success');
+                this.reset();
+            } else {
+                showToast('Lütfen tarih ve mesaj girin.', 'danger');
+            }
+        });
+
+        function loadReminders() {
+            let reminderList = document.getElementById('reminder-list');
+            reminderList.innerHTML = '';
+            reminders.forEach(function(reminder, index) {
+                let li = document.createElement('li');
+                li.className = 'list-group-item d-flex justify-content-between align-items-center';
+                li.textContent = `${reminder.date} - ${reminder.message}`;
+                let deleteBtn = document.createElement('button');
+                deleteBtn.className = 'btn btn-sm btn-danger';
+                deleteBtn.textContent = 'Sil';
+                deleteBtn.setAttribute('data-index', index);
+                deleteBtn.addEventListener('click', deleteReminder);
+                li.appendChild(deleteBtn);
+                reminderList.appendChild(li);
+            });
+        }
+
+        function deleteReminder() {
+            let index = this.getAttribute('data-index');
+            reminders.splice(index, 1);
+            saveUserData();
+            loadReminders();
+            showToast('Hatırlatıcı silindi!', 'success');
+        }
+
+        // Hatırlatıcıları kontrol etme
+        function checkReminders() {
+            let today = new Date().toISOString().split('T')[0];
+            reminders.forEach(function(reminder) {
+                if (reminder.date === today) {
+                    showToast(`Bugün için hatırlatıcı: ${reminder.message}`, 'info');
+                }
+            });
+        }
+
+        // Widget'ları yükleme
+        function loadWidgets() {
+            let widgetArea = document.getElementById('widget-area');
+            widgetArea.innerHTML = '';
+
+            let totalIncome = transactions.reduce(function(sum, t) {
+                return t.type === 'gelir' ? sum + t.amount : sum;
+            }, 0);
+            let incomeWidget = createWidget('Toplam Gelir', `${totalIncome.toFixed(2)} TL`, '#1cc88a');
+            widgetArea.appendChild(incomeWidget);
+
+            let totalExpense = transactions.reduce(function(sum, t) {
+                return t.type === 'gider' ? sum + t.amount : sum;
+            }, 0);
+            let expenseWidget = createWidget('Toplam Gider', `${totalExpense.toFixed(2)} TL`, '#e74a3b');
+            widgetArea.appendChild(expenseWidget);
+        }
+
+        function createWidget(title, value, color) {
+            let col = document.createElement('div');
+            col.className = 'col-md-6';
+            let card = document.createElement('div');
+            card.className = 'card text-white mb-3';
+            card.style.backgroundColor = color;
+            let cardHeader = document.createElement('div');
+            cardHeader.className = 'card-header';
+            cardHeader.textContent = title;
+            let cardBody = document.createElement('div');
+            cardBody.className = 'card-body';
+            let cardText = document.createElement('h5');
+            cardText.className = 'card-title';
+            cardText.textContent = value;
+            cardBody.appendChild(cardText);
+            card.appendChild(cardHeader);
+            card.appendChild(cardBody);
+            col.appendChild(card);
+            return col;
+        }
+
+        // Toast mesajı gösteren fonksiyon
+        function showToast(message, type) {
+            let toastContainer = document.getElementById('toast-container');
+            let toastEl = document.createElement('div');
+            toastEl.className = `toast align-items-center text-bg-${type} border-0`;
+            toastEl.setAttribute('role', 'alert');
+            toastEl.setAttribute('aria-live', 'assertive');
+            toastEl.setAttribute('aria-atomic', 'true');
+
+            toastEl.innerHTML = `
+                <div class="d-flex">
+                    <div class="toast-body">
+                        ${message}
+                    </div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button>
+                </div>
+            `;
+            toastContainer.appendChild(toastEl);
+
+            let toast = new bootstrap.Toast(toastEl);
+            toast.show();
+
+            // Toast kapatıldıktan sonra DOM'dan kaldır
+            toastEl.addEventListener('hidden.bs.toast', function() {
+                toastEl.remove();
+            });
+        }
+
+        // Sayfa yüklendiğinde
+        window.onload = function() {
+            // Hatırlatıcıları periyodik olarak kontrol etme
+            setInterval(checkReminders, 3600000); // Her saatte bir kontrol et
+        };
+    </script>
+</body>
+</html>
